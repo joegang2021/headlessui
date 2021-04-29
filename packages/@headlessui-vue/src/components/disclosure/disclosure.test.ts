@@ -1,4 +1,4 @@
-import { defineComponent, nextTick } from 'vue'
+import { defineComponent, nextTick, ref } from 'vue'
 import { render } from '../../test-utils/vue-testing-library'
 import { Disclosure, DisclosureButton, DisclosurePanel } from './disclosure'
 import { suppressConsoleLogs } from '../../test-utils/suppress-console-logs'
@@ -11,13 +11,9 @@ import {
 } from '../../test-utils/accessibility-assertions'
 import { click, press, Keys, MouseButton } from '../../test-utils/interactions'
 import { html } from '../../test-utils/html'
+import { useOpenClosedProvider, State } from '../../internal/open-closed'
 
 jest.mock('../../hooks/use-id')
-
-beforeAll(() => {
-  jest.spyOn(window, 'requestAnimationFrame').mockImplementation(setImmediate as any)
-  jest.spyOn(window, 'cancelAnimationFrame').mockImplementation(clearImmediate as any)
-})
 
 afterAll(() => jest.restoreAllMocks())
 
@@ -264,6 +260,72 @@ describe('Rendering', () => {
       assertDisclosurePanel({ state: DisclosureState.InvisibleHidden })
     })
   })
+})
+
+describe('Composition', () => {
+  let OpenClosed = defineComponent({
+    props: { open: { type: Boolean } },
+    setup(props, { slots }) {
+      useOpenClosedProvider(ref(props.open ? State.Open : State.Closed))
+      return () => slots.default?.()
+    },
+  })
+
+  it(
+    'should always open the DisclosurePanel because of a wrapping OpenClosed component',
+    suppressConsoleLogs(async () => {
+      renderTemplate({
+        components: { OpenClosed },
+        template: `
+          <Disclosure>
+            <DisclosureButton>Trigger</DisclosureButton>
+            <OpenClosed :open="true">
+              <DisclosurePanel v-slot="data">
+                {{JSON.stringify(data)}}
+              </DisclosurePanel>
+            </OpenClosed>
+          </Disclosure>
+        `,
+      })
+
+      // Verify the Disclosure is visible
+      assertDisclosurePanel({ state: DisclosureState.Visible })
+
+      // Let's try and open the Disclosure
+      await click(getDisclosureButton())
+
+      // Verify the Disclosure is still visible
+      assertDisclosurePanel({ state: DisclosureState.Visible })
+    })
+  )
+
+  it(
+    'should always close the DisclosurePanel because of a wrapping OpenClosed component',
+    suppressConsoleLogs(async () => {
+      renderTemplate({
+        components: { OpenClosed },
+        template: `
+          <Disclosure>
+            <DisclosureButton>Trigger</DisclosureButton>
+            <OpenClosed :open="false">
+              <DisclosurePanel v-slot="data">
+                {{JSON.stringify(data)}}
+              </DisclosurePanel>
+            </OpenClosed>
+          </Disclosure>
+        `,
+      })
+
+      // Verify the Disclosure is hidden
+      assertDisclosurePanel({ state: DisclosureState.InvisibleUnmounted })
+
+      // Let's try and open the Disclosure
+      await click(getDisclosureButton())
+
+      // Verify the Disclosure is still hidden
+      assertDisclosurePanel({ state: DisclosureState.InvisibleUnmounted })
+    })
+  )
 })
 
 describe('Keyboard interactions', () => {
