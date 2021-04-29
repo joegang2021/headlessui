@@ -1,4 +1,4 @@
-import { defineComponent, nextTick } from 'vue'
+import { defineComponent, nextTick, ref } from 'vue'
 import { render } from '../../test-utils/vue-testing-library'
 
 import { Popover, PopoverGroup, PopoverButton, PopoverPanel, PopoverOverlay } from './popover'
@@ -17,6 +17,7 @@ import {
 } from '../../test-utils/accessibility-assertions'
 import { click, press, Keys, MouseButton, shift } from '../../test-utils/interactions'
 import { html } from '../../test-utils/html'
+import { useOpenClosedProvider, State } from '../../internal/open-closed'
 
 jest.mock('../../hooks/use-id')
 
@@ -427,6 +428,76 @@ describe('Rendering', () => {
       })
     )
   })
+})
+
+describe('Composition', () => {
+  let OpenClosed = defineComponent({
+    props: { open: { type: Boolean } },
+    setup(props, { slots }) {
+      useOpenClosedProvider(ref(props.open ? State.Open : State.Closed))
+      return () => slots.default?.()
+    },
+  })
+
+  it(
+    'should always open the PopoverPanel because of a wrapping OpenClosed component',
+    suppressConsoleLogs(async () => {
+      renderTemplate({
+        components: { OpenClosed },
+        template: html`
+          <Popover>
+            <PopoverButton>Trigger</PopoverButton>
+            <OpenClosed :open="true">
+              <PopoverPanel v-slot="data">
+                {{JSON.stringify(data)}}
+              </PopoverPanel>
+            </OpenClosed>
+          </Popover>
+        `,
+      })
+
+      await new Promise<void>(nextTick)
+
+      // Verify the Popover is visible
+      assertPopoverPanel({ state: PopoverState.Visible })
+
+      // Let's try and open the Popover
+      await click(getPopoverButton())
+
+      // Verify the Popover is still visible
+      assertPopoverPanel({ state: PopoverState.Visible })
+    })
+  )
+
+  it(
+    'should always close the PopoverPanel because of a wrapping OpenClosed component',
+    suppressConsoleLogs(async () => {
+      renderTemplate({
+        components: { OpenClosed },
+        template: html`
+          <Popover>
+            <PopoverButton>Trigger</PopoverButton>
+            <OpenClosed :open="false">
+              <PopoverPanel v-slot="data">
+                {{JSON.stringify(data)}}
+              </PopoverPanel>
+            </OpenClosed>
+          </Popover>
+        `,
+      })
+
+      await new Promise<void>(nextTick)
+
+      // Verify the Popover is hidden
+      assertPopoverPanel({ state: PopoverState.InvisibleUnmounted })
+
+      // Let's try and open the Popover
+      await click(getPopoverButton())
+
+      // Verify the Popover is still hidden
+      assertPopoverPanel({ state: PopoverState.InvisibleUnmounted })
+    })
+  )
 })
 
 describe('Keyboard interactions', () => {
