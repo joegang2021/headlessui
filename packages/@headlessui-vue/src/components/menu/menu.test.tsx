@@ -1,4 +1,4 @@
-import { defineComponent, h, nextTick } from 'vue'
+import { defineComponent, h, nextTick, ref } from 'vue'
 import { render } from '../../test-utils/vue-testing-library'
 import { Menu, MenuButton, MenuItems, MenuItem } from './menu'
 import { suppressConsoleLogs } from '../../test-utils/suppress-console-logs'
@@ -30,6 +30,7 @@ import {
   MouseButton,
 } from '../../test-utils/interactions'
 import { jsx } from '../../test-utils/html'
+import { useOpenClosedProvider, State } from '../../internal/open-closed'
 
 jest.mock('../../hooks/use-id')
 
@@ -759,6 +760,76 @@ describe('Rendering composition', () => {
       document.querySelectorAll('.inner').forEach(element => {
         expect(element).toHaveAttribute('role', 'none')
       })
+    })
+  )
+})
+
+describe('Composition', () => {
+  let OpenClosed = defineComponent({
+    props: { open: { type: Boolean } },
+    setup(props, { slots }) {
+      useOpenClosedProvider(ref(props.open ? State.Open : State.Closed))
+      return () => slots.default?.()
+    },
+  })
+
+  it(
+    'should always open the MenuItems because of a wrapping OpenClosed component',
+    suppressConsoleLogs(async () => {
+      renderTemplate({
+        components: { OpenClosed },
+        template: jsx`
+          <Menu>
+            <MenuButton>Trigger</MenuButton>
+            <OpenClosed :open="true">
+              <MenuItems v-slot="data">
+                {{JSON.stringify(data)}}
+              </MenuItems>
+            </OpenClosed>
+          </Menu>
+        `,
+      })
+
+      await new Promise<void>(nextTick)
+
+      // Verify the Menu is visible
+      assertMenu({ state: MenuState.Visible })
+
+      // Let's try and open the Menu
+      await click(getMenuButton())
+
+      // Verify the Menu is still visible
+      assertMenu({ state: MenuState.Visible })
+    })
+  )
+
+  it(
+    'should always close the MenuItems because of a wrapping OpenClosed component',
+    suppressConsoleLogs(async () => {
+      renderTemplate({
+        components: { OpenClosed },
+        template: jsx`
+          <Menu>
+            <MenuButton>Trigger</MenuButton>
+            <OpenClosed :open="false">
+              <MenuItems v-slot="data">
+                {{JSON.stringify(data)}}
+              </MenuItems>
+            </OpenClosed>
+          </Menu>
+        `,
+      })
+
+      await new Promise<void>(nextTick)
+
+      // Verify the Menu is hidden
+      assertMenu({ state: MenuState.InvisibleUnmounted })
+
+      // Let's try and open the Menu
+      await click(getMenuButton())
+
+      // Verify the Menu is still hidden
+      assertMenu({ state: MenuState.InvisibleUnmounted })
     })
   )
 })
