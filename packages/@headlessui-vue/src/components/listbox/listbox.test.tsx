@@ -35,6 +35,7 @@ import {
   MouseButton,
 } from '../../test-utils/interactions'
 import { html } from '../../test-utils/html'
+import { useOpenClosedProvider, State } from '../../internal/open-closed'
 
 jest.mock('../../hooks/use-id')
 
@@ -590,6 +591,76 @@ describe('Rendering composition', () => {
 
       // Verify options are buttons now
       getListboxOptions().forEach(option => assertListboxOption(option, { tag: 'button' }))
+    })
+  )
+})
+
+describe('Composition', () => {
+  let OpenClosed = defineComponent({
+    props: { open: { type: Boolean } },
+    setup(props, { slots }) {
+      useOpenClosedProvider(ref(props.open ? State.Open : State.Closed))
+      return () => slots.default?.()
+    },
+  })
+
+  it(
+    'should always open the ListboxOptions because of a wrapping OpenClosed component',
+    suppressConsoleLogs(async () => {
+      renderTemplate({
+        components: { OpenClosed },
+        template: html`
+          <Listbox>
+            <ListboxButton>Trigger</ListboxButton>
+            <OpenClosed :open="true">
+              <ListboxOptions v-slot="data">
+                {{JSON.stringify(data)}}
+              </ListboxOptions>
+            </OpenClosed>
+          </Listbox>
+        `,
+      })
+
+      await new Promise<void>(nextTick)
+
+      // Verify the Listbox is visible
+      assertListbox({ state: ListboxState.Visible })
+
+      // Let's try and open the Listbox
+      await click(getListboxButton())
+
+      // Verify the Listbox is still visible
+      assertListbox({ state: ListboxState.Visible })
+    })
+  )
+
+  it(
+    'should always close the ListboxOptions because of a wrapping OpenClosed component',
+    suppressConsoleLogs(async () => {
+      renderTemplate({
+        components: { OpenClosed },
+        template: html`
+          <Listbox>
+            <ListboxButton>Trigger</ListboxButton>
+            <OpenClosed :open="false">
+              <ListboxOptions v-slot="data">
+                {{JSON.stringify(data)}}
+              </ListboxOptions>
+            </OpenClosed>
+          </Listbox>
+        `,
+      })
+
+      await new Promise<void>(nextTick)
+
+      // Verify the Listbox is hidden
+      assertListbox({ state: ListboxState.InvisibleUnmounted })
+
+      // Let's try and open the Listbox
+      await click(getListboxButton())
+
+      // Verify the Listbox is still hidden
+      assertListbox({ state: ListboxState.InvisibleUnmounted })
     })
   )
 })
